@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 
 export default function Issues({ issueList = [], setIssueList }) {
+  const [editingId, setEditingId] = useState(null);
+
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [issueShift, setIssueShift] = useState('Day Shift');
   const [issue4M, setIssue4M] = useState('Man');
@@ -15,39 +17,111 @@ export default function Issues({ issueList = [], setIssueList }) {
   const [issueCountermeasure, setIssueCountermeasure] = useState('');
   const [issueFilter, setIssueFilter] = useState('All');
 
+  const resetForm = () => {
+    setEditingId(null);
+    setIssueDate(new Date().toISOString().slice(0, 10));
+    setIssueShift('Day Shift');
+    setIssue4M('Man');
+    setIssueStation('');
+    setIssueVariant('All');
+    setIssueDescription('');
+    setIssueRootCause('');
+    setIssueOwner('');
+    setIssueTargetDate('');
+    setIssueStatus('1/4');
+    setIssueProgressDate('');
+    setIssueCountermeasure('');
+  };
+
   const handleAddIssue = (e) => {
     e.preventDefault();
     if (!issueDescription.trim()) return;
 
-    const newIssue = {
-      id: Date.now(),
-      date: issueDate,
-      shift: issueShift,
-      category: issue4M,
-      station: issueStation,
-      variant: issueVariant,
-      desc: issueDescription,
-      rootCause: issueRootCause || '-',
-      owner: issueOwner || '-',
-      targetDate: issueTargetDate || '-',
-      status: issueStatus,
-      progressDate: issueProgressDate || '-',
-      countermeasure: issueCountermeasure || '-',
-    };
+    if (editingId) {
+      setIssueList((prev) =>
+        prev.map((item) =>
+          item.id === editingId
+            ? {
+                ...item,
+                date: issueDate,
+                shift: issueShift,
+                category: issue4M,
+                station: issueStation || '-',
+                variant: issueVariant || 'All',
+                desc: issueDescription,
+                rootCause: issueRootCause || '-',
+                owner: issueOwner || '-',
+                targetDate: issueTargetDate || '-',
+                status: issueStatus || '1/4',
+                progressDate: issueProgressDate || '-',
+                countermeasure: issueCountermeasure || '-',
+              }
+            : item
+        )
+      );
+      alert('Issue ticket successfully updated!');
+    } else {
+      const newIssue = {
+        id: Date.now() + Math.random(),
+        date: issueDate,
+        shift: issueShift,
+        category: issue4M,
+        station: issueStation || '-',
+        variant: issueVariant || 'All',
+        desc: issueDescription,
+        rootCause: issueRootCause || '-',
+        owner: issueOwner || '-',
+        targetDate: issueTargetDate || '-',
+        status: issueStatus || '1/4',
+        progressDate: issueProgressDate || '-',
+        countermeasure: issueCountermeasure || '-',
+      };
 
-    setIssueList((prev) => [newIssue, ...prev]);
-    setIssueDescription('');
-    setIssueRootCause('');
-    setIssueCountermeasure('');
-    alert('4M issue ticket logged!');
+      setIssueList((prev) => [newIssue, ...prev]);
+      alert('4M issue ticket logged!');
+    }
+
+    resetForm();
   };
+
+  const handleEditIssue = (issue) => {
+    setEditingId(issue.id);
+    setIssueDate(issue.date || new Date().toISOString().slice(0, 10));
+    setIssueShift(issue.shift || 'Day Shift');
+    setIssue4M(issue.category || 'Man');
+    setIssueStation(issue.station && issue.station !== '-' ? issue.station : '');
+    setIssueVariant(issue.variant || 'All');
+    setIssueDescription(issue.desc || '');
+    setIssueRootCause(issue.rootCause && issue.rootCause !== '-' ? issue.rootCause : '');
+    setIssueOwner(issue.owner && issue.owner !== '-' ? issue.owner : '');
+    setIssueTargetDate(issue.targetDate && issue.targetDate !== '-' ? issue.targetDate : '');
+    setIssueStatus(issue.status || '1/4');
+    setIssueProgressDate(issue.progressDate && issue.progressDate !== '-' ? issue.progressDate : '');
+    setIssueCountermeasure(issue.countermeasure && issue.countermeasure !== '-' ? issue.countermeasure : '');
+
+    window.scrollTo({ top: 100, behavior: 'smooth' });
+  };
+
+  const handleDeleteIssue = (id) => {
+    if (window.confirm('Are you sure you want to delete this issue ticket?')) {
+      setIssueList((prev) => prev.filter((item) => item.id !== id));
+      if (editingId === id) resetForm();
+    }
+  };
+
+  // Penapisan selamat (Defensive Filtering)
+  const filteredList = issueList.filter((i) => {
+    if (issueFilter === 'All') return true;
+    const cat = (i.category || '').toLowerCase();
+    return cat === issueFilter.toLowerCase();
+  });
 
   return (
     <section id="issues" className="tab-content active">
       <div className="section-head">
         <div>
           <h2>4M Issues</h2>
-          <p>Edit progress after submission and filter by Man, Machine, Material or Method.</p>
+          <p>Edit progress after submission and filter by Man, Machine, Material, or Method.</p>
         </div>
       </div>
 
@@ -85,7 +159,7 @@ export default function Issues({ issueList = [], setIssueList }) {
           <input
             value={issueStation}
             onChange={(e) => setIssueStation(e.target.value)}
-            placeholder="STN2010"
+            placeholder="e.g. STN2010"
             required
           />
         </label>
@@ -107,7 +181,7 @@ export default function Issues({ issueList = [], setIssueList }) {
             rows="2"
             value={issueDescription}
             onChange={(e) => setIssueDescription(e.target.value)}
-            placeholder="Press Alt+Enter for a new line"
+            placeholder="Describe the issue observed..."
             required
           />
         </label>
@@ -119,6 +193,16 @@ export default function Issues({ issueList = [], setIssueList }) {
             value={issueRootCause}
             onChange={(e) => setIssueRootCause(e.target.value)}
             placeholder="Root cause findings..."
+          />
+        </label>
+
+        <label className="full-width">
+          Countermeasure
+          <textarea
+            rows="2"
+            value={issueCountermeasure}
+            onChange={(e) => setIssueCountermeasure(e.target.value)}
+            placeholder="Corrective actions taken..."
           />
         </label>
 
@@ -143,17 +227,22 @@ export default function Issues({ issueList = [], setIssueList }) {
         <label>
           Status
           <select value={issueStatus} onChange={(e) => setIssueStatus(e.target.value)}>
-            <option value="1/4">1/4</option>
-            <option value="2/4">2/4</option>
-            <option value="3/4">3/4</option>
-            <option value="4/4 Complete">4/4 Complete</option>
+            <option value="1/4">1/4 (Identified)</option>
+            <option value="2/4">2/4 (Root Cause Analyzed)</option>
+            <option value="3/4">3/4 (Countermeasure Executed)</option>
+            <option value="4/4 Complete">4/4 Complete (Verified)</option>
           </select>
         </label>
 
-        <div className="form-actions full-width">
+        <div className="form-actions full-width" style={{ display: 'flex', gap: '8px' }}>
           <button className="btn primary" type="submit">
-            Add 4M Issue
+            {editingId ? 'Update Issue' : 'Add 4M Issue'}
           </button>
+          {editingId && (
+            <button className="btn secondary" type="button" onClick={resetForm}>
+              Cancel Edit
+            </button>
+          )}
         </div>
       </form>
 
@@ -177,49 +266,73 @@ export default function Issues({ issueList = [], setIssueList }) {
             <thead>
               <tr>
                 <th>Date</th>
+                <th>Shift</th>
                 <th>Category</th>
                 <th>Station</th>
                 <th>Variant</th>
                 <th>Issue</th>
                 <th>Root Cause</th>
+                <th>Countermeasure</th>
                 <th>PIC</th>
+                <th>Target Date</th>
                 <th>Status</th>
-                <th>Action</th>
+                <th style={{ textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {issueList.length === 0 ? (
+              {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="small-note" style={{ textAlign: 'center', padding: '16px' }}>
+                  <td colSpan="12" className="small-note" style={{ textAlign: 'center', padding: '18px' }}>
                     No 4M issues found in storage.
                   </td>
                 </tr>
               ) : (
-                issueList
-                  .filter((i) => issueFilter === 'All' || i.category === issueFilter)
-                  .map((iss) => (
+                filteredList.map((iss) => {
+                  const statusStr = String(iss.status || '1/4');
+                  const isDone = statusStr.includes('4/4');
+
+                  return (
                     <tr key={iss.id}>
-                      <td>{iss.date}</td>
-                      <td>{iss.category}</td>
-                      <td>{iss.station || '-'}</td>
-                      <td>{iss.variant || '-'}</td>
-                      <td>{iss.desc}</td>
-                      <td>{iss.rootCause || '-'}</td>
-                      <td>{iss.owner || '-'}</td>
-                      <td style={{ fontWeight: 'bold', color: iss.status.includes('4/4') ? '#167a3f' : '#b42318' }}>
-                        {iss.status}
-                      </td>
+                      <td>{iss.date || '-'}</td>
+                      <td>{iss.shift || '-'}</td>
                       <td>
-                        <button
-                          className="btn danger small"
-                          type="button"
-                          onClick={() => setIssueList(issueList.filter((x) => x.id !== iss.id))}
-                        >
-                          ✕
-                        </button>
+                        <span style={{ fontWeight: 600 }}>{iss.category || 'General'}</span>
+                      </td>
+                      <td>{iss.station || '-'}</td>
+                      <td>{iss.variant || 'All'}</td>
+                      <td>{iss.desc || '-'}</td>
+                      <td>{iss.rootCause || '-'}</td>
+                      <td>{iss.countermeasure || '-'}</td>
+                      <td>{iss.owner || '-'}</td>
+                      <td>{iss.targetDate || '-'}</td>
+                      <td style={{ fontWeight: 'bold', color: isDone ? '#167a3f' : '#b42318' }}>
+                        {statusStr}
+                      </td>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                          <button
+                            className="btn secondary small"
+                            type="button"
+                            title="Edit this ticket"
+                            onClick={() => handleEditIssue(iss)}
+                            style={{ padding: '4px 8px' }}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            className="btn danger small"
+                            type="button"
+                            title="Delete this ticket"
+                            onClick={() => handleDeleteIssue(iss.id)}
+                            style={{ padding: '4px 8px' }}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ))
+                  );
+                })
               )}
             </tbody>
           </table>
