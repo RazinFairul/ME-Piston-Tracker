@@ -8,8 +8,7 @@ export default function DailyOutput({
   issueList = [],
   setIssueList,
 }) {
-  // --- Form State ---
-  const [editingGroupId, setEditingGroupId] = useState(null);
+  const [editingKey, setEditingKey] = useState(null);
 
   const [outputDate, setOutputDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [outputShift, setOutputShift] = useState('Day Shift');
@@ -28,12 +27,10 @@ export default function DailyOutput({
     { id: 'pe-' + Date.now(), variant: 'PFI A00', unit: 'engine', qty: '' },
   ]);
 
-  // Senarai isu on-site
   const [onsiteIssues, setOnsiteIssues] = useState([
     { desc: '', category: 'Man', start: '', end: '' },
   ]);
 
-  // Tambah baris enjin baharu
   const handleAddEngineType = () => {
     setProductionEntries((prev) => [
       ...prev,
@@ -41,7 +38,6 @@ export default function DailyOutput({
     ]);
   };
 
-  // Padam baris enjin tertentu (butang pangkah ✕)
   const handleRemoveEngineType = (index) => {
     if (productionEntries.length === 1) {
       alert('Sekurang-kurangnya satu jenis enjin diperlukan.');
@@ -50,7 +46,6 @@ export default function DailyOutput({
     setProductionEntries((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Tambah baris isu on-site
   const handleAddOnsiteIssue = () => {
     setOnsiteIssues((prev) => [
       ...prev,
@@ -58,9 +53,8 @@ export default function DailyOutput({
     ]);
   };
 
-  // Reset borang ke asal
   const resetForm = () => {
-    setEditingGroupId(null);
+    setEditingKey(null);
     setOutputRemarks('');
     setOutputDowntime('0');
     setOutputManpower('');
@@ -71,7 +65,59 @@ export default function DailyOutput({
     setOnsiteIssues([{ desc: '', category: 'Man', start: '', end: '' }]);
   };
 
-  // Submit Borang (Simpan Baharu atau Kemas Kini)
+  // Kunci penyatuan unik berasaskan sesi
+  const getSessionKey = (rec) =>
+    `${rec.date}_${rec.shift}_${rec.station || 'STN2010-1M'}_${rec.hours}_${rec.downtime || '0'}`;
+
+  // 1. Ratakan semua rekod (sama ada format lama atau format baru berkumpulan)
+  const flattenedList = outputList.flatMap((entry, idx) => {
+    if (entry.items && Array.isArray(entry.items)) {
+      return entry.items.map((item, itemIdx) => ({
+        ...item,
+        id: `${entry.groupId || idx}-${itemIdx}`,
+        date: entry.date,
+        shift: entry.shift,
+        station: entry.station || 'STN2010-1M',
+        hours: entry.hours,
+        downtime: entry.downtime || '0',
+        remarks: entry.remarks || '-',
+        manpower: entry.manpower || '',
+      }));
+    }
+    return [
+      {
+        ...entry,
+        id: entry.id || `legacy-${idx}`,
+        station: entry.station || 'STN2010-1M',
+        downtime: entry.downtime || '0',
+        remarks: entry.remarks || '-',
+      },
+    ];
+  });
+
+  // 2. Kumpulkan rekod yang mempunyai Date, Shift, Station, Working Hours dan Downtime yang sama
+  const groupedSessions = flattenedList.reduce((acc, rec) => {
+    const key = getSessionKey(rec);
+    if (!acc[key]) {
+      acc[key] = {
+        sessionKey: key,
+        date: rec.date,
+        shift: rec.shift,
+        station: rec.station,
+        hours: rec.hours,
+        downtime: rec.downtime,
+        remarks: rec.remarks,
+        manpower: rec.manpower,
+        items: [],
+      };
+    }
+    acc[key].items.push(rec);
+    return acc;
+  }, {});
+
+  const groupedList = Object.values(groupedSessions);
+
+  // Simpan atau Kemaskini Borang
   const handleSubmit = (e) => {
     e.preventDefault();
     const hrs = parseFloat(outputHours) || 8.08;
@@ -81,13 +127,10 @@ export default function DailyOutput({
     );
 
     if (validEntries.length === 0) {
-      alert('Sila masukkan kuantiti yang sah untuk sekurang-kurangnya satu enjin.');
+      alert('Sila masukkan kuantiti yang sah.');
       return;
     }
 
-    const groupId = editingGroupId || 'grp-' + Date.now();
-
-    // Hitung item-item enjin di bawah kumpulan ini
     const calculatedItems = validEntries.map((pe) => {
       const qtyNum = parseInt(pe.qty, 10);
       const pistons = pe.unit === 'engine' ? qtyNum * 4 : qtyNum;
@@ -108,8 +151,8 @@ export default function DailyOutput({
       };
     });
 
-    const groupRecord = {
-      groupId,
+    const newGroup = {
+      groupId: 'grp-' + Date.now(),
       date: outputDate,
       shift: outputShift,
       station: outputStation,
@@ -123,109 +166,61 @@ export default function DailyOutput({
       items: calculatedItems,
     };
 
-    if (editingGroupId) {
-      // Mod Kemaskini (Update)
-      setOutputList((prev) =>
-        prev.map((g) => (g.groupId === editingGroupId ? groupRecord : g))
-      );
-
-      // Kemas kini stok berkaitan
-      setStockList((prev) => {
-        const withoutOld = prev.filter((s) => s.sourceGroupId !== editingGroupId);
-        const newStockIns = calculatedItems.map((item) => ({
-          id: Date.now() + Math.random(),
-          sourceGroupId: groupId,
-          date: outputDate,
-          variant: item.variant,
-          type: 'IN',
-          source: 'Daily Output',
-          pistons: item.pistons,
-          engines: item.engines,
-          remarks: `Auto stock-in from ${outputShift} (${outputStation})`,
-        }));
-        return [...newStockIns, ...withoutOld];
-      });
-
+    if (editingKey) {
+      // Buang semua rekod lama di bawah kumpulan/sesi ini dan gantikan dengan yang dikemaskini
+      const remaining = flattenedList.filter((r) => getSessionKey(r) !== editingKey);
+      setOutputList([newGroup, ...remaining]);
       alert('Rekod berjaya dikemaskini!');
     } else {
-      // Mod Tambah Baharu
-      setOutputList((prev) => [groupRecord, ...prev]);
-
-      // Masuk ke Stock secara automatik
-      const newStockIns = calculatedItems.map((item) => ({
-        id: Date.now() + Math.random(),
-        sourceGroupId: groupId,
-        date: outputDate,
-        variant: item.variant,
-        type: 'IN',
-        source: 'Daily Output',
-        pistons: item.pistons,
-        engines: item.engines,
-        remarks: `Auto stock-in from ${outputShift} (${outputStation})`,
-      }));
-      setStockList((prev) => [...newStockIns, ...prev]);
-
-      // Simpan isu on-site jika ada
-      if (outputHasIssue) {
-        const issuesToAdd = onsiteIssues
-          .filter((oi) => oi.desc.trim())
-          .map((oi) => ({
-            id: Date.now() + Math.random(),
-            sourceGroupId: groupId,
-            date: outputDate,
-            shift: outputShift,
-            category: oi.category,
-            desc: oi.desc,
-            start: oi.start || '-',
-            end: oi.end || '-',
-          }));
-        setIssueList((prev) => [...issuesToAdd, ...prev]);
-      }
-
-      alert('Rekod Daily Output berjaya ditambah!');
+      setOutputList([newGroup, ...outputList]);
+      alert('Rekod berjaya disimpan!');
     }
+
+    // Selaraskan stok automatik
+    const newStockIns = calculatedItems.map((item) => ({
+      id: Date.now() + Math.random(),
+      date: outputDate,
+      variant: item.variant,
+      type: 'IN',
+      source: 'Daily Output',
+      pistons: item.pistons,
+      engines: item.engines,
+      remarks: `Auto stock-in from ${outputShift} (${outputStation})`,
+    }));
+    setStockList((prev) => [...newStockIns, ...prev]);
 
     resetForm();
   };
 
-  // Muat data ke dalam borang untuk disunting (Edit)
-  const handleEditGroup = (group) => {
-    setEditingGroupId(group.groupId);
+  // Muat data ke borang untuk diedit
+  const handleEditSession = (group) => {
+    setEditingKey(group.sessionKey);
     setOutputDate(group.date);
     setOutputShift(group.shift);
     setOutputStation(group.station);
-    setOutputTimeMode(group.timeMode || 'hours');
     setOutputHours(group.hours.toString());
-    setOutputStart(group.startTime || '08:00');
-    setOutputEnd(group.endTime || '17:00');
-    setOutputManpower(group.manpower || '');
-    setOutputDowntime(group.downtime || '0');
+    setOutputDowntime(group.downtime.toString().replace('m', ''));
     setOutputRemarks(group.remarks === '-' ? '' : group.remarks);
+    setOutputManpower(group.manpower || '');
 
-    if (group.items && group.items.length > 0) {
-      setProductionEntries(
-        group.items.map((it) => ({
-          id: 'pe-' + Math.random(),
-          variant: it.variant,
-          unit: it.unit,
-          qty: it.qty,
-        }))
-      );
-    }
+    setProductionEntries(
+      group.items.map((it) => ({
+        id: 'pe-' + Math.random(),
+        variant: it.variant,
+        unit: it.unit || 'engine',
+        qty: it.engines || it.qty || (it.pistons ? it.pistons / 4 : ''),
+      }))
+    );
 
-    // Skrol ke bahagian borang
     window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
-  // Padam rekod kumpulan (Delete)
-  const handleDeleteGroup = (groupId) => {
-    if (window.confirm('Adakah anda pasti ingin memadam rekod ini?')) {
-      setOutputList((prev) => prev.filter((g) => g.groupId !== groupId));
-      // Padam stok berkaitan
-      setStockList((prev) => prev.filter((s) => s.sourceGroupId !== groupId));
-      if (editingGroupId === groupId) {
-        resetForm();
-      }
+  // Padam seluruh sesi yang bercantum
+  const handleDeleteSession = (sessionKey) => {
+    if (window.confirm('Padam semua rekod bagi sesi ini?')) {
+      const remaining = flattenedList.filter((r) => getSessionKey(r) !== sessionKey);
+      setOutputList(remaining);
+      if (editingKey === sessionKey) resetForm();
     }
   };
 
@@ -238,7 +233,6 @@ export default function DailyOutput({
         </div>
       </div>
 
-      {/* BORANG INPUT / EDIT */}
       <form className="panel form-grid" onSubmit={handleSubmit}>
         <label>
           Date
@@ -269,7 +263,6 @@ export default function DailyOutput({
           </select>
         </label>
 
-        {/* Bahagian Jenis Enjin dengan Butang Pangkah (✕) */}
         <div className="production-entry-box full-width">
           <div className="production-entry-head">
             <div>
@@ -292,12 +285,11 @@ export default function DailyOutput({
               <div key={entry.id || idx} className="production-entry">
                 <div className="production-entry-title">
                   <strong>Engine Type {idx + 1}</strong>
-                  {/* Butang Pangkah (✕) - hanya muncul jika ada lebih dari 1 enjin */}
                   {productionEntries.length > 1 && (
                     <button
                       type="button"
                       onClick={() => handleRemoveEngineType(idx)}
-                      title="Padam engine type ini"
+                      title="Padam jenis enjin ini"
                       style={{
                         background: '#fee2e2',
                         color: '#dc2626',
@@ -532,9 +524,9 @@ export default function DailyOutput({
 
         <div className="form-actions full-width" style={{ display: 'flex', gap: '8px' }}>
           <button className="btn primary" type="submit">
-            {editingGroupId ? 'Update Output' : 'Add Output'}
+            {editingKey ? 'Update Output' : 'Add Output'}
           </button>
-          {editingGroupId && (
+          {editingKey && (
             <button className="btn secondary" type="button" onClick={resetForm}>
               Cancel Edit
             </button>
@@ -542,18 +534,18 @@ export default function DailyOutput({
         </div>
       </form>
 
-      {/* JADUAL OUTPUT DENGAN PENYATUAN KUMPULAN (ROWSPAN), EDIT & DELETE */}
+      {/* JADUAL BERCANTUM BERDASARKAN DATE, SHIFT, STATION, WORKING HOURS & DOWNTIME */}
       <div className="panel table-panel">
         <div className="table-head">
-          <h3>Output Records ({outputList.length})</h3>
+          <h3>Output Records ({flattenedList.length})</h3>
           <div className="table-tools">
             <button
               className="btn danger"
               type="button"
               onClick={() => {
-                if (window.confirm('Delete all stored output records?')) {
+                if (window.confirm('Padam semua rekod output?')) {
                   setOutputList([]);
-                  setStockList((prev) => prev.filter((s) => !s.sourceGroupId));
+                  setStockList((prev) => prev.filter((s) => s.source !== 'Daily Output'));
                 }
               }}
             >
@@ -583,73 +575,60 @@ export default function DailyOutput({
               </tr>
             </thead>
             <tbody>
-              {outputList.length === 0 ? (
+              {groupedList.length === 0 ? (
                 <tr>
                   <td colSpan="14" className="small-note" style={{ textAlign: 'center', padding: '16px' }}>
                     No output records saved in storage.
                   </td>
                 </tr>
               ) : (
-                outputList.map((group) => {
-                  const items = group.items || [
-                    {
-                      variant: group.variant,
-                      unit: group.unit || 'engine',
-                      pistons: group.pistons,
-                      engines: group.engines,
-                      jph: group.jph,
-                      ctPiston: group.ctPiston,
-                      ctEngine: group.ctEngine,
-                    },
-                  ];
-
-                  return items.map((item, itemIdx) => (
-                    <tr key={`${group.groupId || group.id}-${itemIdx}`}>
-                      {/* Sel-sel kongsi hanya dirender sekali dengan rowSpan */}
-                      {itemIdx === 0 && (
+                groupedList.map((group) => {
+                  const span = group.items.length;
+                  return group.items.map((item, idx) => (
+                    <tr key={`${group.sessionKey}-${item.id || idx}`}>
+                      {/* Sel-sel yang dicantumkan (rowSpan) */}
+                      {idx === 0 && (
                         <>
-                          <td rowSpan={items.length} style={{ verticalAlign: 'middle', fontWeight: 600 }}>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle', fontWeight: 600 }}>
                             {group.date}
                           </td>
-                          <td rowSpan={items.length} style={{ verticalAlign: 'middle' }}>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
                             {group.shift}
                           </td>
-                          <td rowSpan={items.length} style={{ verticalAlign: 'middle' }}>
-                            {group.station || 'STN2010-1M'}
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
+                            {group.station}
                           </td>
                         </>
                       )}
 
-                      {/* Sel khusus untuk jenis enjin ini */}
+                      {/* Baris varian masing-masing */}
                       <td style={{ fontWeight: 600, color: '#1d4ed8' }}>{item.variant}</td>
-                      <td>{item.unit}</td>
+                      <td>{item.unit || 'engine'}</td>
                       <td>{item.pistons}</td>
                       <td>{item.engines}</td>
 
-                      {/* Maklumat masa dan operasi yang kongsi */}
-                      {itemIdx === 0 && (
-                        <>
-                          <td rowSpan={items.length} style={{ verticalAlign: 'middle' }}>
-                            {group.hours}h
-                          </td>
-                        </>
+                      {/* Working Hours dicantumkan */}
+                      {idx === 0 && (
+                        <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
+                          {group.hours}h
+                        </td>
                       )}
 
                       <td>{item.jph}</td>
                       <td style={{ fontWeight: 600 }}>{item.ctPiston}s</td>
                       <td>{item.ctEngine}s</td>
 
-                      {/* Sel kongsi downtime, remarks, dan butang tindakan */}
-                      {itemIdx === 0 && (
+                      {/* Downtime, Remarks dan Action dicantumkan */}
+                      {idx === 0 && (
                         <>
-                          <td rowSpan={items.length} style={{ verticalAlign: 'middle' }}>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
                             {group.downtime}m
                           </td>
-                          <td rowSpan={items.length} style={{ verticalAlign: 'middle' }}>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
                             {group.remarks}
                           </td>
                           <td
-                            rowSpan={items.length}
+                            rowSpan={span}
                             style={{
                               verticalAlign: 'middle',
                               textAlign: 'center',
@@ -660,8 +639,8 @@ export default function DailyOutput({
                               <button
                                 className="btn secondary small"
                                 type="button"
-                                title="Edit rekod ini"
-                                onClick={() => handleEditGroup(group)}
+                                title="Edit sesi ini"
+                                onClick={() => handleEditSession(group)}
                                 style={{ padding: '4px 8px' }}
                               >
                                 ✎
@@ -669,8 +648,8 @@ export default function DailyOutput({
                               <button
                                 className="btn danger small"
                                 type="button"
-                                title="Padam rekod ini"
-                                onClick={() => handleDeleteGroup(group.groupId || group.id)}
+                                title="Padam sesi ini"
+                                onClick={() => handleDeleteSession(group.sessionKey)}
                                 style={{ padding: '4px 8px' }}
                               >
                                 ✕
