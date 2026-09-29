@@ -22,7 +22,7 @@ export default function DailyOutput({
   const [outputRemarks, setOutputRemarks] = useState('');
   const [outputHasIssue, setOutputHasIssue] = useState(false);
 
-  // Senarai jenis enjin dalam borang
+  // Engine entries in the form
   const [productionEntries, setProductionEntries] = useState([
     { id: 'pe-' + Date.now(), variant: 'PFI A00', unit: 'engine', qty: '' },
   ]);
@@ -40,7 +40,7 @@ export default function DailyOutput({
 
   const handleRemoveEngineType = (index) => {
     if (productionEntries.length === 1) {
-      alert('Sekurang-kurangnya satu jenis enjin diperlukan.');
+      alert('At least one engine type is required.');
       return;
     }
     setProductionEntries((prev) => prev.filter((_, i) => i !== index));
@@ -65,11 +65,11 @@ export default function DailyOutput({
     setOnsiteIssues([{ desc: '', category: 'Man', start: '', end: '' }]);
   };
 
-  // Kunci penyatuan unik berasaskan sesi
+  // Unique session key for grouping matching records
   const getSessionKey = (rec) =>
     `${rec.date}_${rec.shift}_${rec.station || 'STN2010-1M'}_${rec.hours}_${rec.downtime || '0'}`;
 
-  // 1. Ratakan semua rekod (sama ada format lama atau format baru berkumpulan)
+  // 1. Flatten all records (supports both legacy flat records and grouped batch entries)
   const flattenedList = outputList.flatMap((entry, idx) => {
     if (entry.items && Array.isArray(entry.items)) {
       return entry.items.map((item, itemIdx) => ({
@@ -95,7 +95,7 @@ export default function DailyOutput({
     ];
   });
 
-  // 2. Kumpulkan rekod yang mempunyai Date, Shift, Station, Working Hours dan Downtime yang sama
+  // 2. Group records matching Date, Shift, Station, Working Hours, and Downtime
   const groupedSessions = flattenedList.reduce((acc, rec) => {
     const key = getSessionKey(rec);
     if (!acc[key]) {
@@ -117,7 +117,7 @@ export default function DailyOutput({
 
   const groupedList = Object.values(groupedSessions);
 
-  // Simpan atau Kemaskini Borang
+  // Submit Form Handler
   const handleSubmit = (e) => {
     e.preventDefault();
     const hrs = parseFloat(outputHours) || 8.08;
@@ -127,7 +127,7 @@ export default function DailyOutput({
     );
 
     if (validEntries.length === 0) {
-      alert('Sila masukkan kuantiti yang sah.');
+      alert('Please enter a valid quantity for at least one engine variant.');
       return;
     }
 
@@ -167,16 +167,15 @@ export default function DailyOutput({
     };
 
     if (editingKey) {
-      // Buang semua rekod lama di bawah kumpulan/sesi ini dan gantikan dengan yang dikemaskini
       const remaining = flattenedList.filter((r) => getSessionKey(r) !== editingKey);
       setOutputList([newGroup, ...remaining]);
-      alert('Rekod berjaya dikemaskini!');
+      alert('Output record successfully updated!');
     } else {
       setOutputList([newGroup, ...outputList]);
-      alert('Rekod berjaya disimpan!');
+      alert('Output record successfully added!');
     }
 
-    // Selaraskan stok automatik
+    // Auto Stock-In Sync
     const newStockIns = calculatedItems.map((item) => ({
       id: Date.now() + Math.random(),
       date: outputDate,
@@ -192,7 +191,6 @@ export default function DailyOutput({
     resetForm();
   };
 
-  // Muat data ke borang untuk diedit
   const handleEditSession = (group) => {
     setEditingKey(group.sessionKey);
     setOutputDate(group.date);
@@ -215,9 +213,8 @@ export default function DailyOutput({
     window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
-  // Padam seluruh sesi yang bercantum
   const handleDeleteSession = (sessionKey) => {
-    if (window.confirm('Padam semua rekod bagi sesi ini?')) {
+    if (window.confirm('Are you sure you want to delete all records in this session?')) {
       const remaining = flattenedList.filter((r) => getSessionKey(r) !== sessionKey);
       setOutputList(remaining);
       if (editingKey === sessionKey) resetForm();
@@ -263,6 +260,7 @@ export default function DailyOutput({
           </select>
         </label>
 
+        {/* Engine entries with delete button */}
         <div className="production-entry-box full-width">
           <div className="production-entry-head">
             <div>
@@ -289,7 +287,7 @@ export default function DailyOutput({
                     <button
                       type="button"
                       onClick={() => handleRemoveEngineType(idx)}
-                      title="Padam jenis enjin ini"
+                      title="Remove this engine type"
                       style={{
                         background: '#fee2e2',
                         color: '#dc2626',
@@ -534,7 +532,7 @@ export default function DailyOutput({
         </div>
       </form>
 
-      {/* JADUAL BERCANTUM BERDASARKAN DATE, SHIFT, STATION, WORKING HOURS & DOWNTIME */}
+      {/* MERGED TABLE BY SESSION */}
       <div className="panel table-panel">
         <div className="table-head">
           <h3>Output Records ({flattenedList.length})</h3>
@@ -543,7 +541,7 @@ export default function DailyOutput({
               className="btn danger"
               type="button"
               onClick={() => {
-                if (window.confirm('Padam semua rekod output?')) {
+                if (window.confirm('Delete all output records?')) {
                   setOutputList([]);
                   setStockList((prev) => prev.filter((s) => s.source !== 'Daily Output'));
                 }
@@ -586,7 +584,6 @@ export default function DailyOutput({
                   const span = group.items.length;
                   return group.items.map((item, idx) => (
                     <tr key={`${group.sessionKey}-${item.id || idx}`}>
-                      {/* Sel-sel yang dicantumkan (rowSpan) */}
                       {idx === 0 && (
                         <>
                           <td rowSpan={span} style={{ verticalAlign: 'middle', fontWeight: 600 }}>
@@ -601,13 +598,11 @@ export default function DailyOutput({
                         </>
                       )}
 
-                      {/* Baris varian masing-masing */}
                       <td style={{ fontWeight: 600, color: '#1d4ed8' }}>{item.variant}</td>
                       <td>{item.unit || 'engine'}</td>
                       <td>{item.pistons}</td>
                       <td>{item.engines}</td>
 
-                      {/* Working Hours dicantumkan */}
                       {idx === 0 && (
                         <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
                           {group.hours}h
@@ -618,7 +613,6 @@ export default function DailyOutput({
                       <td style={{ fontWeight: 600 }}>{item.ctPiston}s</td>
                       <td>{item.ctEngine}s</td>
 
-                      {/* Downtime, Remarks dan Action dicantumkan */}
                       {idx === 0 && (
                         <>
                           <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
@@ -639,7 +633,7 @@ export default function DailyOutput({
                               <button
                                 className="btn secondary small"
                                 type="button"
-                                title="Edit sesi ini"
+                                title="Edit this session"
                                 onClick={() => handleEditSession(group)}
                                 style={{ padding: '4px 8px' }}
                               >
@@ -648,7 +642,7 @@ export default function DailyOutput({
                               <button
                                 className="btn danger small"
                                 type="button"
-                                title="Padam sesi ini"
+                                title="Delete this session"
                                 onClick={() => handleDeleteSession(group.sessionKey)}
                                 style={{ padding: '4px 8px' }}
                               >

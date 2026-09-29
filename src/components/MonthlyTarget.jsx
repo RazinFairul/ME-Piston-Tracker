@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 
 export default function MonthlyTarget({ targetList = [], setTargetList }) {
-  // Input Formulir
   const [targetMonth, setTargetMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [targetPFI, setTargetPFI] = useState('0');
   const [targetAFD, setTargetAFD] = useState('0');
@@ -14,26 +13,22 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
   const [monthlyHours, setMonthlyHours] = useState('8.08');
   const [monthlyShifts, setMonthlyShifts] = useState('1');
 
-  // State untuk kartu kalkulasi komitmen
   const [calcResult, setCalcResult] = useState({
     totalTarget: 0,
-    ctBasedJph: 0,
-    plannedJph: 0,
+    ctBasedJph: '0.00',
+    plannedJph: '0.00',
     estimatedCapacity: 0,
     margin: 0,
   });
 
-  // State baris tabel yang di-expand
   const [expandedRowId, setExpandedRowId] = useState(null);
 
-  // Perhitungan total target mesin
   const currentTotalTarget =
     (parseInt(targetPFI, 10) || 0) +
     (parseInt(targetAFD, 10) || 0) +
     (parseInt(targetBFNDFN, 10) || 0) +
     (parseInt(targetMP, 10) || 0);
 
-  // Fungsi saat tombol "Calculate" ditekan
   const handleCalculate = () => {
     const ctSec = parseFloat(monthlyCycle) || 24.5;
     const oeeVal = (parseFloat(monthlyOee) || 85) / 100;
@@ -44,8 +39,6 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
 
     // CT-based JPH = (3600 / (CT piston * 4)) * OEE
     const ctBasedJph = ctSec > 0 ? ((3600 / (ctSec * 4)) * oeeVal).toFixed(2) : '0.00';
-
-    // Kapasitas estimasi berdasarkan Planned JPH atau CT-based JPH
     const activeJph = plannedJphVal > 0 ? plannedJphVal : parseFloat(ctBasedJph);
     const estimatedCapacity = Math.round(activeJph * hours * shifts * days);
     const margin = estimatedCapacity - currentTotalTarget;
@@ -59,12 +52,11 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
     });
   };
 
-  // Fungsi simpan target
   const handleSaveTarget = (e) => {
     e.preventDefault();
 
     if (currentTotalTarget <= 0) {
-      alert('Silakan masukkan jumlah target mesin untuk varian.');
+      alert('Please enter a target engine quantity for variants.');
       return;
     }
 
@@ -98,10 +90,8 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
     };
 
     setTargetList((prev) => [newTarget, ...prev]);
-
-    // Jalankan kalkulasi kartu agar sinkron
     handleCalculate();
-    alert('Target bulanan berhasil disimpan!');
+    alert('Monthly target successfully saved!');
   };
 
   const toggleRowDetails = (id) => {
@@ -117,7 +107,6 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
         </div>
       </div>
 
-      {/* Formulir Input Target Bulanan */}
       <form className="panel form-grid" onSubmit={handleSaveTarget}>
         <label>
           Month
@@ -129,7 +118,6 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
           />
         </label>
 
-        {/* Kotak Varian Target */}
         <div className="variant-target full-width">
           <div className="variant-target-head">
             <strong>Management Target by Variant (engines)</strong>
@@ -251,7 +239,6 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
           </select>
         </label>
 
-        {/* Tombol Aksi: Calculate & Save Target */}
         <div className="form-actions full-width" style={{ marginTop: '6px' }}>
           <button className="btn secondary" type="button" onClick={handleCalculate}>
             Calculate
@@ -262,7 +249,7 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
         </div>
       </form>
 
-      {/* 5 Kartu Komitmen / Kalkulasi Metrik Sesuai Gambar Acuan */}
+      {/* 5 Metric Calculation Cards */}
       <div className="commitment-cards" style={{ margin: '18px 0' }}>
         <div className="commit-card" style={{ borderTop: '4px solid #2563eb' }}>
           <span>Total Target</span>
@@ -288,7 +275,7 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
         </div>
       </div>
 
-      {/* Tabel Saved Management Targets */}
+      {/* Saved Management Targets Table */}
       <div className="panel target-list-panel">
         <div className="table-head">
           <h3>Saved Management Targets</h3>
@@ -353,7 +340,6 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
                       </td>
                     </tr>
 
-                    {/* Baris Rincian jika tombol Details ditekan */}
                     {expandedRowId === t.id && (
                       <tr className="target-detail-row">
                         <td colSpan="10" style={{ padding: '12px 18px', background: '#f8fafc' }}>
@@ -376,7 +362,7 @@ export default function MonthlyTarget({ targetList = [], setTargetList }) {
         </div>
       </div>
 
-      {/* Bagian Monthly Target Timeline */}
+      {/* Monthly Target Timeline */}
       <div className="panel" style={{ marginTop: '14px' }}>
         <div className="table-head">
           <h3>Monthly Target Timeline</h3>
