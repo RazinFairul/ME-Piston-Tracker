@@ -3,18 +3,21 @@ import React, { useState } from 'react';
 export default function Issues({ issueList = [], setIssueList }) {
   const [editingId, setEditingId] = useState(null);
 
+  // Form states matching original layout
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [issueShift, setIssueShift] = useState('Day Shift');
   const [issue4M, setIssue4M] = useState('Man');
   const [issueStation, setIssueStation] = useState('');
-  const [issueVariant, setIssueVariant] = useState('All');
+  const [issueVariant, setIssueVariant] = useState('PFI A00');
   const [issueDescription, setIssueDescription] = useState('');
   const [issueRootCause, setIssueRootCause] = useState('');
   const [issueOwner, setIssueOwner] = useState('');
   const [issueTargetDate, setIssueTargetDate] = useState('');
   const [issueStatus, setIssueStatus] = useState('1/4');
-  const [issueProgressDate, setIssueProgressDate] = useState('');
+  const [issueProgressDate, setIssueProgressDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [issueCountermeasure, setIssueCountermeasure] = useState('');
+
+  // Filter state
   const [issueFilter, setIssueFilter] = useState('All');
 
   const resetForm = () => {
@@ -23,13 +26,13 @@ export default function Issues({ issueList = [], setIssueList }) {
     setIssueShift('Day Shift');
     setIssue4M('Man');
     setIssueStation('');
-    setIssueVariant('All');
+    setIssueVariant('PFI A00');
     setIssueDescription('');
     setIssueRootCause('');
     setIssueOwner('');
     setIssueTargetDate('');
     setIssueStatus('1/4');
-    setIssueProgressDate('');
+    setIssueProgressDate(new Date().toISOString().slice(0, 10));
     setIssueCountermeasure('');
   };
 
@@ -47,7 +50,7 @@ export default function Issues({ issueList = [], setIssueList }) {
                 shift: issueShift,
                 category: issue4M,
                 station: issueStation || '-',
-                variant: issueVariant || 'All',
+                variant: issueVariant || 'PFI A00',
                 desc: issueDescription,
                 rootCause: issueRootCause || '-',
                 owner: issueOwner || '-',
@@ -67,7 +70,7 @@ export default function Issues({ issueList = [], setIssueList }) {
         shift: issueShift,
         category: issue4M,
         station: issueStation || '-',
-        variant: issueVariant || 'All',
+        variant: issueVariant || 'PFI A00',
         desc: issueDescription,
         rootCause: issueRootCause || '-',
         owner: issueOwner || '-',
@@ -78,7 +81,7 @@ export default function Issues({ issueList = [], setIssueList }) {
       };
 
       setIssueList((prev) => [newIssue, ...prev]);
-      alert('4M issue ticket logged!');
+      alert('4M issue ticket added!');
     }
 
     resetForm();
@@ -90,42 +93,49 @@ export default function Issues({ issueList = [], setIssueList }) {
     setIssueShift(issue.shift || 'Day Shift');
     setIssue4M(issue.category || 'Man');
     setIssueStation(issue.station && issue.station !== '-' ? issue.station : '');
-    setIssueVariant(issue.variant || 'All');
+    setIssueVariant(issue.variant || 'PFI A00');
     setIssueDescription(issue.desc || '');
     setIssueRootCause(issue.rootCause && issue.rootCause !== '-' ? issue.rootCause : '');
     setIssueOwner(issue.owner && issue.owner !== '-' ? issue.owner : '');
     setIssueTargetDate(issue.targetDate && issue.targetDate !== '-' ? issue.targetDate : '');
     setIssueStatus(issue.status || '1/4');
-    setIssueProgressDate(issue.progressDate && issue.progressDate !== '-' ? issue.progressDate : '');
+    setIssueProgressDate(issue.progressDate && issue.progressDate !== '-' ? issue.progressDate : new Date().toISOString().slice(0, 10));
     setIssueCountermeasure(issue.countermeasure && issue.countermeasure !== '-' ? issue.countermeasure : '');
 
-    window.scrollTo({ top: 100, behavior: 'smooth' });
+    window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
   const handleDeleteIssue = (id) => {
-    if (window.confirm('Are you sure you want to delete this issue ticket?')) {
+    if (window.confirm('Are you sure you want to delete this issue?')) {
       setIssueList((prev) => prev.filter((item) => item.id !== id));
       if (editingId === id) resetForm();
     }
   };
 
-  // Penapisan selamat (Defensive Filtering)
+  // Safe category filtering
   const filteredList = issueList.filter((i) => {
     if (issueFilter === 'All') return true;
     const cat = (i.category || '').toLowerCase();
     return cat === issueFilter.toLowerCase();
   });
 
+  // Category counts
+  const manCount = issueList.filter((i) => (i.category || '').toLowerCase() === 'man').length;
+  const machineCount = issueList.filter((i) => (i.category || '').toLowerCase() === 'machine').length;
+  const materialCount = issueList.filter((i) => (i.category || '').toLowerCase() === 'material').length;
+  const methodCount = issueList.filter((i) => (i.category || '').toLowerCase() === 'method').length;
+
   return (
     <section id="issues" className="tab-content active">
       <div className="section-head">
         <div>
           <h2>4M Issues</h2>
-          <p>Edit progress after submission and filter by Man, Machine, Material, or Method.</p>
+          <p>Edit progress after submission and filter by Man, Machine, Material or Method.</p>
         </div>
       </div>
 
       <form className="panel form-grid" onSubmit={handleAddIssue}>
+        {/* Row 1 */}
         <label>
           Date
           <input
@@ -154,12 +164,13 @@ export default function Issues({ issueList = [], setIssueList }) {
           </select>
         </label>
 
+        {/* Row 2 */}
         <label>
           Station
           <input
             value={issueStation}
             onChange={(e) => setIssueStation(e.target.value)}
-            placeholder="e.g. STN2010"
+            placeholder="STN2010"
             required
           />
         </label>
@@ -175,34 +186,25 @@ export default function Issues({ issueList = [], setIssueList }) {
           </select>
         </label>
 
-        <label className="full-width">
+        <label>
           Issue Description
           <textarea
             rows="2"
             value={issueDescription}
             onChange={(e) => setIssueDescription(e.target.value)}
-            placeholder="Describe the issue observed..."
+            placeholder="Press Alt+Enter for a new line"
             required
           />
         </label>
 
-        <label className="full-width">
+        {/* Row 3 */}
+        <label>
           Root Cause
           <textarea
             rows="2"
             value={issueRootCause}
             onChange={(e) => setIssueRootCause(e.target.value)}
-            placeholder="Root cause findings..."
-          />
-        </label>
-
-        <label className="full-width">
-          Countermeasure
-          <textarea
-            rows="2"
-            value={issueCountermeasure}
-            onChange={(e) => setIssueCountermeasure(e.target.value)}
-            placeholder="Corrective actions taken..."
+            placeholder="Press Alt+Enter for a new line"
           />
         </label>
 
@@ -224,17 +226,38 @@ export default function Issues({ issueList = [], setIssueList }) {
           />
         </label>
 
+        {/* Row 4 */}
         <label>
           Status
           <select value={issueStatus} onChange={(e) => setIssueStatus(e.target.value)}>
-            <option value="1/4">1/4 (Identified)</option>
-            <option value="2/4">2/4 (Root Cause Analyzed)</option>
-            <option value="3/4">3/4 (Countermeasure Executed)</option>
-            <option value="4/4 Complete">4/4 Complete (Verified)</option>
+            <option value="1/4">1/4</option>
+            <option value="2/4">2/4</option>
+            <option value="3/4">3/4</option>
+            <option value="4/4 Complete">4/4 Complete</option>
           </select>
         </label>
 
-        <div className="form-actions full-width" style={{ display: 'flex', gap: '8px' }}>
+        <label>
+          Progress Update Date
+          <input
+            type="date"
+            value={issueProgressDate}
+            onChange={(e) => setIssueProgressDate(e.target.value)}
+          />
+        </label>
+
+        <label>
+          Countermeasure / Progress
+          <textarea
+            rows="2"
+            value={issueCountermeasure}
+            onChange={(e) => setIssueCountermeasure(e.target.value)}
+            placeholder="What was updated / completed today? Press Alt+Enter for a new line."
+          />
+        </label>
+
+        {/* Form Action Buttons */}
+        <div className="form-actions full-width" style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
           <button className="btn primary" type="submit">
             {editingId ? 'Update Issue' : 'Add 4M Issue'}
           </button>
@@ -246,44 +269,69 @@ export default function Issues({ issueList = [], setIssueList }) {
         </div>
       </form>
 
-      <div className="issue-filters panel">
+      {/* Filter Row with Left Accent Bar */}
+      <div className="issue-filters panel" style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '4px solid #8b5cf6' }}>
         <strong>Filter:</strong>
         {['All', 'Man', 'Machine', 'Material', 'Method'].map((f) => (
           <button
             key={f}
-            className={`filter-btn ${issueFilter === f ? 'active' : ''}`}
             type="button"
+            className={`filter-btn ${issueFilter === f ? 'active' : ''}`}
             onClick={() => setIssueFilter(f)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '6px',
+              border: '1px solid #d1d5db',
+              background: issueFilter === f ? '#8b5cf6' : '#ffffff',
+              color: issueFilter === f ? '#ffffff' : '#374151',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
           >
             {f}
           </button>
         ))}
       </div>
 
-      <div className="panel">
+      {/* Category Counts Chips */}
+      <div style={{ display: 'flex', gap: '10px', margin: '10px 0 14px 0', flexWrap: 'wrap' }}>
+        <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+          Man: {manCount}
+        </span>
+        <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+          Machine: {machineCount}
+        </span>
+        <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+          Material: {materialCount}
+        </span>
+        <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+          Method: {methodCount}
+        </span>
+      </div>
+
+      {/* Issues Table */}
+      <div className="panel table-panel">
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Shift</th>
-                <th>Category</th>
+                <th>Issue Date</th>
+                <th>4M</th>
                 <th>Station</th>
                 <th>Variant</th>
                 <th>Issue</th>
-                <th>Root Cause</th>
-                <th>Countermeasure</th>
                 <th>PIC</th>
-                <th>Target Date</th>
+                <th>Target</th>
                 <th>Status</th>
+                <th>Latest Progress</th>
                 <th style={{ textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan="12" className="small-note" style={{ textAlign: 'center', padding: '18px' }}>
-                    No 4M issues found in storage.
+                  <td colSpan="10" className="small-note" style={{ textAlign: 'center', padding: '20px' }}>
+                    No Issues.
                   </td>
                 </tr>
               ) : (
@@ -293,20 +341,20 @@ export default function Issues({ issueList = [], setIssueList }) {
 
                   return (
                     <tr key={iss.id}>
-                      <td>{iss.date || '-'}</td>
-                      <td>{iss.shift || '-'}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{iss.date || '-'}</td>
                       <td>
-                        <span style={{ fontWeight: 600 }}>{iss.category || 'General'}</span>
+                        <span style={{ fontWeight: 600 }}>{iss.category || 'Man'}</span>
                       </td>
                       <td>{iss.station || '-'}</td>
                       <td>{iss.variant || 'All'}</td>
-                      <td>{iss.desc || '-'}</td>
-                      <td>{iss.rootCause || '-'}</td>
-                      <td>{iss.countermeasure || '-'}</td>
+                      <td style={{ maxWidth: '220px', whiteSpace: 'pre-wrap' }}>{iss.desc || '-'}</td>
                       <td>{iss.owner || '-'}</td>
-                      <td>{iss.targetDate || '-'}</td>
-                      <td style={{ fontWeight: 'bold', color: isDone ? '#167a3f' : '#b42318' }}>
+                      <td style={{ whiteSpace: 'nowrap' }}>{iss.targetDate || '-'}</td>
+                      <td style={{ fontWeight: 'bold', color: isDone ? '#167a3f' : '#b42318', whiteSpace: 'nowrap' }}>
                         {statusStr}
+                      </td>
+                      <td style={{ maxWidth: '240px', whiteSpace: 'pre-wrap' }}>
+                        {iss.countermeasure && iss.countermeasure !== '-' ? iss.countermeasure : '-'}
                       </td>
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
