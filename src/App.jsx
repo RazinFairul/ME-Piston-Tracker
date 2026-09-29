@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './index.css';
 
-// Import komponen-komponen mengikut nama fail tepat dalam gambar
+// Import komponen-komponen mengikut nama fail tepat
 import Dashboard from './components/Dashboard.jsx';
 import DailyOutput from './components/DailyOutput.jsx';
 import Stock from './components/Stock.jsx';
@@ -85,6 +85,23 @@ export default function App() {
   useEffect(() => { localStorage.setItem('stp_orders', JSON.stringify(orderList)); }, [orderList]);
   useEffect(() => { localStorage.setItem('stp_spares', JSON.stringify(spareList)); }, [spareList]);
 
+  // Ratakan (flatten) kumpulan rekod output untuk komponen Dashboard, Cycle Time, dan Part Ordering
+  const flatOutputList = outputList.flatMap((g) => {
+    if (g.items && Array.isArray(g.items)) {
+      return g.items.map((it) => ({
+        ...it,
+        id: g.groupId || g.id,
+        date: g.date,
+        shift: g.shift,
+        station: g.station,
+        hours: g.hours,
+        downtime: g.downtime,
+        remarks: g.remarks,
+      }));
+    }
+    return [g];
+  });
+
   const tabs = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'output', label: 'Daily Output' },
@@ -137,7 +154,7 @@ export default function App() {
       <main>
         {activeTab === 'dashboard' && (
           <Dashboard
-            outputList={outputList}
+            outputList={flatOutputList}
             stockList={stockList}
             issueList={issueList}
             manpowerList={manpowerList}
@@ -149,7 +166,9 @@ export default function App() {
           <DailyOutput
             outputList={outputList}
             setOutputList={setOutputList}
+            stockList={stockList}
             setStockList={setStockList}
+            issueList={issueList}
             setIssueList={setIssueList}
           />
         )}
@@ -160,7 +179,7 @@ export default function App() {
 
         {activeTab === 'cycle' && (
           <CycleTime
-            outputList={outputList}
+            outputList={flatOutputList}
             cycleTarget={cycleTarget}
             setCycleTarget={setCycleTarget}
           />
@@ -192,7 +211,7 @@ export default function App() {
             setOrderList={setOrderList}
             spareList={spareList}
             setSpareList={setSpareList}
-            outputList={outputList}
+            outputList={flatOutputList}
           />
         )}
       </main>
