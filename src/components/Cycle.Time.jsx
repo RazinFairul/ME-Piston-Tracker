@@ -13,7 +13,13 @@ export default function CycleTime({
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  // Ratakan data agar mendukung format lama dan format baru (items)
+  const targetNum = parseFloat(cycleTarget) || 24.5;
+
+  // 1. Kunci unik sesi (Date + Shift + Station + Hours + Downtime)
+  const getSessionKey = (rec) =>
+    `${rec.date}_${rec.shift}_${rec.station || 'STN2010-1M'}_${rec.hours}_${rec.downtime || '0'}`;
+
+  // 2. Ratakan semua rekod (menyokong format lama dan format baharu kumpulan)
   const flattenedList = outputList.flatMap((entry, idx) => {
     if (entry.items && Array.isArray(entry.items)) {
       return entry.items.map((item, itemIdx) => ({
@@ -22,7 +28,8 @@ export default function CycleTime({
         date: entry.date,
         shift: entry.shift,
         station: entry.station || 'STN2010-1M',
-        hours: entry.hours,
+        hours: parseFloat(entry.hours) || 8.08,
+        downtime: entry.downtime || '0',
       }));
     }
     return [
@@ -30,19 +37,71 @@ export default function CycleTime({
         ...entry,
         uniqueId: entry.id || `legacy-${idx}`,
         station: entry.station || 'STN2010-1M',
+        hours: parseFloat(entry.hours) || 8.08,
+        downtime: entry.downtime || '0',
       },
     ];
   });
 
-  // Filter berdasarkan Stasiun dan Varian
-  const filteredData = flattenedList.filter((o) => {
-    const matchVariant = cycleVariantFilter === 'all' || o.variant === cycleVariantFilter;
-    const matchStation = cycleStationFilter === 'all' || (o.station || 'STN2010-1M') === cycleStationFilter;
-    return matchVariant && matchStation;
+  // 3. Kumpulkan sesi dan hitung metrik perkongsian masa yang tepat (sama seperti Daily Output)
+  const groupedSessions = flattenedList.reduce((acc, rec) => {
+    const key = getSessionKey(rec);
+    if (!acc[key]) {
+      acc[key] = {
+        sessionKey: key,
+        date: rec.date,
+        shift: rec.shift,
+        station: rec.station,
+        hours: rec.hours,
+        items: [],
+      };
+    }
+    acc[key].items.push(rec);
+    return acc;
+  }, {});
+
+  const calculatedGroups = Object.values(groupedSessions).map((group) => {
+    const totalEngines = group.items.reduce((sum, it) => sum + Number(it.engines || 0), 0);
+    const totalPistons = group.items.reduce((sum, it) => sum + Number(it.pistons || 0), 0);
+    const hrs = group.hours > 0 ? group.hours : 8.08;
+
+    const sessionJph = hrs > 0 ? (totalEngines / hrs).toFixed(1) : '0.0';
+    const sessionCtPiston = totalPistons > 0 ? ((hrs * 3600) / totalPistons).toFixed(2) : '0.00';
+    const sessionCtEngine = totalEngines > 0 ? ((hrs * 3600) / totalEngines).toFixed(2) : '0.00';
+
+    return {
+      ...group,
+      totalEngines,
+      totalPistons,
+      sessionJph,
+      sessionCtPiston,
+      sessionCtEngine,
+    };
   });
 
-  const targetNum = parseFloat(cycleTarget) || 24.5;
+  // 4. Tapis sesi dan item mengikut Stesen & Varian
+  const filteredGroups = calculatedGroups
+    .filter((g) => cycleStationFilter === 'all' || g.station === cycleStationFilter)
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((it) => cycleVariantFilter === 'all' || it.variant === cycleVariantFilter),
+    }))
+    .filter((g) => g.items.length > 0);
 
+  // Senarai titik untuk dilukis pada graf
+  const graphPoints = filteredGroups.map((g) => ({
+    date: g.date,
+    shift: g.shift,
+    station: g.station,
+    ctPiston: parseFloat(g.sessionCtPiston) || 0,
+    ctEngine: parseFloat(g.sessionCtEngine) || 0,
+    jph: g.sessionJph,
+    pistons: g.totalPistons,
+    engines: g.totalEngines,
+    variants: g.items.map((it) => it.variant).join(', '),
+  }));
+
+  // 5. Lukis Graf HTML5 Canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -65,14 +124,16 @@ export default function CycleTime({
     const plotW = width - padLeft - padRight;
     const plotH = height - padTop - padBottom;
 
-    const yMax = 29;
+    // Skala Y dinamik (maksimum sekurang-kurangnya 30 atau nilai CT tertinggi)
+    const maxValFound = Math.max(...graphPoints.map((p) => p.ctPiston), targetNum);
+    const yMax = Math.ceil(maxValFound * 1.25);
     const yMin = 0;
     const getYPixel = (val) => padTop + plotH - ((val - yMin) / (yMax - yMin)) * plotH;
 
     ctx.clearRect(0, 0, width, height);
 
-    // Garis grid horizontal dan angka sumbu Y
-    const yTicks = [0, 6, 12, 18, 24, 29];
+    // Garisan grid & nombor paksi Y
+    const yTicks = [0, Math.round(yMax * 0.25), Math.round(yMax * 0.5), Math.round(yMax * 0.75), yMax];
     ctx.lineWidth = 1;
     ctx.font = '11px Arial, sans-serif';
     ctx.textAlign = 'right';
@@ -90,7 +151,7 @@ export default function CycleTime({
       ctx.fillText(tick.toString(), padLeft - 10, y);
     });
 
-    // Judul sumbu Y
+    // Tajuk Unit Paksi Y
     ctx.save();
     ctx.fillStyle = '#475569';
     ctx.font = 'bold 11px Arial, sans-serif';
@@ -106,13 +167,13 @@ export default function CycleTime({
     ctx.lineTo(width - padRight, padTop + plotH);
     ctx.stroke();
 
-    // Judul sumbu X
+    // Label Paksi X (Date)
     ctx.fillStyle = '#475569';
     ctx.font = 'bold 11px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Date', padLeft + plotW / 2, height - 10);
 
-    // Garis putus-putus merah (Target)
+    // Garis Sasaran Merah Putus-putus
     const targetY = getYPixel(targetNum);
     ctx.save();
     ctx.setLineDash([5, 4]);
@@ -129,31 +190,29 @@ export default function CycleTime({
     ctx.fillText(`Target ${targetNum.toFixed(2)} sec`, width - padRight, targetY - 6);
     ctx.restore();
 
-    // Gambar titik data & garis grafik jika data tersedia
-    if (filteredData.length > 0) {
+    // Lukis Titik & Garisan Tren Data
+    if (graphPoints.length > 0) {
       const getXPixel = (index) => {
-        if (filteredData.length === 1) return padLeft + plotW / 2;
-        return padLeft + (index / (filteredData.length - 1)) * plotW;
+        if (graphPoints.length === 1) return padLeft + plotW / 2;
+        return padLeft + (index / (graphPoints.length - 1)) * plotW;
       };
 
-      // Garis penghubung biru
+      // Garisan biru
       ctx.strokeStyle = '#2563eb';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      filteredData.forEach((pt, i) => {
+      graphPoints.forEach((pt, i) => {
         const x = getXPixel(i);
-        const val = parseFloat(pt.ctPiston) || 0;
-        const y = getYPixel(Math.min(val, yMax));
+        const y = getYPixel(pt.ctPiston);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
       ctx.stroke();
 
-      // Lingkaran titik (dots)
-      filteredData.forEach((pt, i) => {
+      // Titik bulatan (dots)
+      graphPoints.forEach((pt, i) => {
         const x = getXPixel(i);
-        const val = parseFloat(pt.ctPiston) || 0;
-        const y = getYPixel(Math.min(val, yMax));
+        const y = getYPixel(pt.ctPiston);
 
         ctx.fillStyle = '#2563eb';
         ctx.beginPath();
@@ -170,12 +229,12 @@ export default function CycleTime({
         ctx.fillText(pt.date ? pt.date.slice(5) : '', x, padTop + plotH + 16);
       });
     }
-  }, [filteredData, targetNum]);
+  }, [graphPoints, targetNum]);
 
-  // Handler kursor hover tooltip
+  // Handler Tooltip Tetikus
   const handleMouseMove = (e) => {
     const canvas = canvasRef.current;
-    if (!canvas || filteredData.length === 0) return;
+    if (!canvas || graphPoints.length === 0) return;
 
     const rect = canvas.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
@@ -186,15 +245,16 @@ export default function CycleTime({
     const padTop = 35;
     const plotW = rect.width - padLeft - padRight;
     const plotH = 330 - padTop - 45;
-    const yMax = 29;
+
+    const maxValFound = Math.max(...graphPoints.map((p) => p.ctPiston), targetNum);
+    const yMax = Math.ceil(maxValFound * 1.25);
 
     let found = null;
-    filteredData.forEach((pt, i) => {
-      const x = filteredData.length === 1 ? padLeft + plotW / 2 : padLeft + (i / (filteredData.length - 1)) * plotW;
-      const val = parseFloat(pt.ctPiston) || 0;
-      const y = padTop + plotH - (Math.min(val, yMax) / yMax) * plotH;
+    graphPoints.forEach((pt, i) => {
+      const x = graphPoints.length === 1 ? padLeft + plotW / 2 : padLeft + (i / (graphPoints.length - 1)) * plotW;
+      const y = padTop + plotH - (pt.ctPiston / yMax) * plotH;
 
-      if (Math.hypot(mouseX - x, mouseY - y) < 12) {
+      if (Math.hypot(mouseX - x, mouseY - y) < 14) {
         found = pt;
         setMousePos({ x, y });
       }
@@ -267,7 +327,7 @@ export default function CycleTime({
             ref={canvasRef}
             onMouseMove={handleMouseMove}
             onMouseLeave={() => setHoveredPoint(null)}
-            style={{ width: '100%', height: '330px', display: 'block', cursor: filteredData.length > 0 ? 'crosshair' : 'default' }}
+            style={{ width: '100%', height: '330px', display: 'block', cursor: graphPoints.length > 0 ? 'crosshair' : 'default' }}
           />
 
           {hoveredPoint && (
@@ -275,7 +335,7 @@ export default function CycleTime({
               style={{
                 position: 'absolute',
                 left: `${mousePos.x + 12}px`,
-                top: `${mousePos.y - 45}px`,
+                top: `${mousePos.y - 50}px`,
                 background: 'rgba(15, 23, 42, 0.95)',
                 color: '#fff',
                 padding: '7px 11px',
@@ -288,11 +348,12 @@ export default function CycleTime({
               }}
             >
               <div><strong>Date:</strong> {hoveredPoint.date} ({hoveredPoint.shift})</div>
-              <div><strong>Station:</strong> {hoveredPoint.station || 'STN2010-1M'}</div>
-              <div><strong>Variant:</strong> {hoveredPoint.variant}</div>
-              <div><strong>Output:</strong> {hoveredPoint.pistons} pistons ({hoveredPoint.engines} eng)</div>
-              <div><strong>CT Piston:</strong> {hoveredPoint.ctPiston} sec</div>
-              <div><strong>CT Engine:</strong> {hoveredPoint.ctEngine} sec</div>
+              <div><strong>Station:</strong> {hoveredPoint.station}</div>
+              <div><strong>Variants:</strong> {hoveredPoint.variants}</div>
+              <div><strong>Total Output:</strong> {hoveredPoint.pistons} pistons ({hoveredPoint.engines} eng)</div>
+              <div><strong>Shift JPH:</strong> {hoveredPoint.jph}</div>
+              <div><strong>Shift CT Piston:</strong> {hoveredPoint.ctPiston.toFixed(2)} sec</div>
+              <div><strong>Shift CT Engine:</strong> {hoveredPoint.ctEngine.toFixed(2)} sec</div>
             </div>
           )}
         </div>
@@ -301,6 +362,7 @@ export default function CycleTime({
         </div>
       </div>
 
+      {/* JADUAL CYCLE TIME BERCANTUM MENGIKUT SESI (SELARI DENGAN DAILY OUTPUT) */}
       <div className="panel">
         <div className="table-wrap">
           <table>
@@ -319,31 +381,67 @@ export default function CycleTime({
               </tr>
             </thead>
             <tbody>
-              {filteredData.length === 0 ? (
+              {filteredGroups.length === 0 ? (
                 <tr>
                   <td colSpan="10" className="small-note" style={{ textAlign: 'center', padding: '16px' }}>
                     No output cycle time data available.
                   </td>
                 </tr>
               ) : (
-                filteredData.map((rec) => {
-                  const meets = Number(rec.ctPiston) <= targetNum;
-                  return (
-                    <tr key={rec.uniqueId}>
-                      <td>{rec.date}</td>
-                      <td>{rec.shift}</td>
-                      <td>{rec.station || 'STN2010-1M'}</td>
-                      <td>{rec.variant}</td>
-                      <td>{rec.pistons}</td>
-                      <td>{rec.hours}h</td>
-                      <td>{rec.jph}</td>
-                      <td style={{ fontWeight: 'bold' }}>{rec.ctPiston}s</td>
-                      <td>{rec.ctEngine}s</td>
-                      <td style={{ color: meets ? '#167a3f' : '#b42318', fontWeight: 'bold' }}>
-                        {meets ? 'PASS' : 'SLOW'}
-                      </td>
+                filteredGroups.map((group) => {
+                  const span = group.items.length;
+                  const meets = Number(group.sessionCtPiston) <= targetNum;
+
+                  return group.items.map((item, idx) => (
+                    <tr key={`${group.sessionKey}-${item.uniqueId || idx}`}>
+                      {/* Sel-sel yang dicantumkan (rowSpan) */}
+                      {idx === 0 && (
+                        <>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle', fontWeight: 600 }}>
+                            {group.date}
+                          </td>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
+                            {group.shift}
+                          </td>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
+                            {group.station}
+                          </td>
+                        </>
+                      )}
+
+                      {/* Baris per varian */}
+                      <td style={{ fontWeight: 600, color: '#1d4ed8' }}>{item.variant}</td>
+                      <td>{item.pistons}</td>
+
+                      {/* Metrik masa dan kelajuan bercantum mengikut tempoh masa berkongsi */}
+                      {idx === 0 && (
+                        <>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
+                            {group.hours}h
+                          </td>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle', fontWeight: 600 }}>
+                            {group.sessionJph}
+                          </td>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle', fontWeight: 600 }}>
+                            {group.sessionCtPiston}s
+                          </td>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
+                            {group.sessionCtEngine}s
+                          </td>
+                          <td
+                            rowSpan={span}
+                            style={{
+                              verticalAlign: 'middle',
+                              color: meets ? '#167a3f' : '#b42318',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            {meets ? 'PASS' : 'SLOW'}
+                          </td>
+                        </>
+                      )}
                     </tr>
-                  );
+                  ));
                 })
               )}
             </tbody>
