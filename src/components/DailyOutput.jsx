@@ -22,7 +22,6 @@ export default function DailyOutput({
   const [outputRemarks, setOutputRemarks] = useState('');
   const [outputHasIssue, setOutputHasIssue] = useState(false);
 
-  // Engine entries in the form
   const [productionEntries, setProductionEntries] = useState([
     { id: 'pe-' + Date.now(), variant: 'PFI A00', unit: 'engine', qty: '' },
   ]);
@@ -65,11 +64,10 @@ export default function DailyOutput({
     setOnsiteIssues([{ desc: '', category: 'Man', start: '', end: '' }]);
   };
 
-  // Unique session key for grouping matching records
   const getSessionKey = (rec) =>
     `${rec.date}_${rec.shift}_${rec.station || 'STN2010-1M'}_${rec.hours}_${rec.downtime || '0'}`;
 
-  // 1. Flatten all records (supports both legacy flat records and grouped batch entries)
+  // 1. Flatten list from stored data
   const flattenedList = outputList.flatMap((entry, idx) => {
     if (entry.items && Array.isArray(entry.items)) {
       return entry.items.map((item, itemIdx) => ({
@@ -95,7 +93,7 @@ export default function DailyOutput({
     ];
   });
 
-  // 2. Group records matching Date, Shift, Station, Working Hours, and Downtime
+  // 2. Group records sharing the same session
   const groupedSessions = flattenedList.reduce((acc, rec) => {
     const key = getSessionKey(rec);
     if (!acc[key]) {
@@ -104,7 +102,7 @@ export default function DailyOutput({
         date: rec.date,
         shift: rec.shift,
         station: rec.station,
-        hours: rec.hours,
+        hours: parseFloat(rec.hours) || 8.08,
         downtime: rec.downtime,
         remarks: rec.remarks,
         manpower: rec.manpower,
@@ -115,9 +113,26 @@ export default function DailyOutput({
     return acc;
   }, {});
 
-  const groupedList = Object.values(groupedSessions);
+  const groupedList = Object.values(groupedSessions).map((group) => {
+    const totalEngines = group.items.reduce((sum, it) => sum + Number(it.engines || 0), 0);
+    const totalPistons = group.items.reduce((sum, it) => sum + Number(it.pistons || 0), 0);
+    const hrs = group.hours > 0 ? group.hours : 8.08;
 
-  // Submit Form Handler
+    const sessionJph = hrs > 0 ? (totalEngines / hrs).toFixed(1) : '0.0';
+    const sessionCtPiston = totalPistons > 0 ? ((hrs * 3600) / totalPistons).toFixed(2) : '0.00';
+    const sessionCtEngine = totalEngines > 0 ? ((hrs * 3600) / totalEngines).toFixed(2) : '0.00';
+
+    return {
+      ...group,
+      totalEngines,
+      totalPistons,
+      sessionJph,
+      sessionCtPiston,
+      sessionCtEngine,
+    };
+  });
+
+  // Handle Submit Form
   const handleSubmit = (e) => {
     e.preventDefault();
     const hrs = parseFloat(outputHours) || 8.08;
@@ -135,9 +150,6 @@ export default function DailyOutput({
       const qtyNum = parseInt(pe.qty, 10);
       const pistons = pe.unit === 'engine' ? qtyNum * 4 : qtyNum;
       const engines = pe.unit === 'engine' ? qtyNum : (qtyNum / 4).toFixed(1);
-      const jph = hrs > 0 ? (engines / hrs).toFixed(1) : '0.0';
-      const ctPiston = pistons > 0 ? ((hrs * 3600) / pistons).toFixed(2) : '0.00';
-      const ctEngine = engines > 0 ? ((hrs * 3600) / engines).toFixed(2) : '0.00';
 
       return {
         variant: pe.variant,
@@ -145,9 +157,6 @@ export default function DailyOutput({
         qty: qtyNum,
         pistons: Number(pistons),
         engines: Number(engines),
-        jph,
-        ctPiston,
-        ctEngine,
       };
     });
 
@@ -260,13 +269,12 @@ export default function DailyOutput({
           </select>
         </label>
 
-        {/* Engine entries with delete button */}
         <div className="production-entry-box full-width">
           <div className="production-entry-head">
             <div>
               <strong>Production by Engine Type</strong>
               <span className="small-note">
-                Record one or more engine types for this shift.
+                Record one or more engine types sharing this shift duration.
               </span>
             </div>
             <button
@@ -532,7 +540,7 @@ export default function DailyOutput({
         </div>
       </form>
 
-      {/* MERGED TABLE BY SESSION */}
+      {/* MERGED TABLE WITH SHARED SHIFT METRICS */}
       <div className="panel table-panel">
         <div className="table-head">
           <h3>Output Records ({flattenedList.length})</h3>
@@ -584,6 +592,7 @@ export default function DailyOutput({
                   const span = group.items.length;
                   return group.items.map((item, idx) => (
                     <tr key={`${group.sessionKey}-${item.id || idx}`}>
+                      {/* Merged Date, Shift, Station */}
                       {idx === 0 && (
                         <>
                           <td rowSpan={span} style={{ verticalAlign: 'middle', fontWeight: 600 }}>
@@ -598,23 +607,27 @@ export default function DailyOutput({
                         </>
                       )}
 
+                      {/* Variant-specific metrics */}
                       <td style={{ fontWeight: 600, color: '#1d4ed8' }}>{item.variant}</td>
                       <td>{item.unit || 'engine'}</td>
                       <td>{item.pistons}</td>
                       <td>{item.engines}</td>
 
-                      {idx === 0 && (
-                        <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
-                          {group.hours}h
-                        </td>
-                      )}
-
-                      <td>{item.jph}</td>
-                      <td style={{ fontWeight: 600 }}>{item.ctPiston}s</td>
-                      <td>{item.ctEngine}s</td>
-
+                      {/* Shared Shift Production Metrics */}
                       {idx === 0 && (
                         <>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
+                            {group.hours}h
+                          </td>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle', fontWeight: 600 }}>
+                            {group.sessionJph}
+                          </td>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle', fontWeight: 600 }}>
+                            {group.sessionCtPiston}s
+                          </td>
+                          <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
+                            {group.sessionCtEngine}s
+                          </td>
                           <td rowSpan={span} style={{ verticalAlign: 'middle' }}>
                             {group.downtime}m
                           </td>
