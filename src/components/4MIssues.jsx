@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 export default function Issues({ issueList = [], setIssueList }) {
   const [editingId, setEditingId] = useState(null);
 
-  // Form states matching original layout
+  // Form states
   const [issueDate, setIssueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [issueShift, setIssueShift] = useState('Day Shift');
   const [issue4M, setIssue4M] = useState('Man');
@@ -119,7 +119,7 @@ export default function Issues({ issueList = [], setIssueList }) {
     return cat === issueFilter.toLowerCase();
   });
 
-  // Category counts
+  // Kiraan mengikut kategori 4M
   const manCount = issueList.filter((i) => (i.category || '').toLowerCase() === 'man').length;
   const machineCount = issueList.filter((i) => (i.category || '').toLowerCase() === 'machine').length;
   const materialCount = issueList.filter((i) => (i.category || '').toLowerCase() === 'material').length;
@@ -135,7 +135,7 @@ export default function Issues({ issueList = [], setIssueList }) {
       </div>
 
       <form className="panel form-grid" onSubmit={handleAddIssue}>
-        {/* Row 1 */}
+        {/* Baris 1 */}
         <label>
           Date
           <input
@@ -164,7 +164,7 @@ export default function Issues({ issueList = [], setIssueList }) {
           </select>
         </label>
 
-        {/* Row 2 */}
+        {/* Baris 2 */}
         <label>
           Station
           <input
@@ -197,7 +197,7 @@ export default function Issues({ issueList = [], setIssueList }) {
           />
         </label>
 
-        {/* Row 3 */}
+        {/* Baris 3 */}
         <label>
           Root Cause
           <textarea
@@ -226,7 +226,7 @@ export default function Issues({ issueList = [], setIssueList }) {
           />
         </label>
 
-        {/* Row 4 */}
+        {/* Baris 4 */}
         <label>
           Status
           <select value={issueStatus} onChange={(e) => setIssueStatus(e.target.value)}>
@@ -256,7 +256,7 @@ export default function Issues({ issueList = [], setIssueList }) {
           />
         </label>
 
-        {/* Form Action Buttons */}
+        {/* Butang Tindakan Borang */}
         <div className="form-actions full-width" style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
           <button className="btn primary" type="submit">
             {editingId ? 'Update Issue' : 'Add 4M Issue'}
@@ -269,47 +269,128 @@ export default function Issues({ issueList = [], setIssueList }) {
         </div>
       </form>
 
-      {/* Filter Row with Left Accent Bar */}
-      <div className="issue-filters panel" style={{ display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '4px solid #8b5cf6' }}>
-        <strong>Filter:</strong>
-        {['All', 'Man', 'Machine', 'Material', 'Method'].map((f) => (
-          <button
-            key={f}
-            type="button"
-            className={`filter-btn ${issueFilter === f ? 'active' : ''}`}
-            onClick={() => setIssueFilter(f)}
-            style={{
-              padding: '6px 14px',
-              borderRadius: '6px',
-              border: '1px solid #d1d5db',
-              background: issueFilter === f ? '#8b5cf6' : '#ffffff',
-              color: issueFilter === f ? '#ffffff' : '#374151',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            {f}
-          </button>
-        ))}
+      {/* Bar Penapis Khas dengan Jalur Ungu Sebelah Kiri */}
+      <div
+        className="panel"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          borderLeft: '4px solid #7c3aed',
+          padding: '12px 18px',
+          marginBottom: '14px',
+          borderRadius: '8px',
+          background: '#ffffff',
+        }}
+      >
+        <strong style={{ fontSize: '13px', color: '#1f2937' }}>Filter:</strong>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {['All', 'Man', 'Machine', 'Material', 'Method'].map((f) => {
+            const isActive = issueFilter === f;
+            return (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setIssueFilter(f)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  border: isActive ? '1px solid #7c3aed' : '1px solid #d1d5db',
+                  background: isActive ? '#7c3aed' : '#ffffff',
+                  color: isActive ? '#ffffff' : '#374151',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {f}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Category Counts Chips */}
-      <div style={{ display: 'flex', gap: '10px', margin: '10px 0 14px 0', flexWrap: 'wrap' }}>
-        <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+      {/* Lencana Kiraan Ringkasan 4M Mengikut Reka Bentuk Gambar Asal */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '10px',
+          marginBottom: '16px',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
+      >
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            padding: '5px 12px',
+            fontSize: '12px',
+            fontWeight: 700,
+            color: '#1e293b',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+          }}
+        >
           Man: {manCount}
-        </span>
-        <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+        </div>
+
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            padding: '5px 12px',
+            fontSize: '12px',
+            fontWeight: 700,
+            color: '#1e293b',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+          }}
+        >
           Machine: {machineCount}
-        </span>
-        <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+        </div>
+
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            padding: '5px 12px',
+            fontSize: '12px',
+            fontWeight: 700,
+            color: '#1e293b',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+          }}
+        >
           Material: {materialCount}
-        </span>
-        <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '5px 12px', fontSize: '12px', fontWeight: 600, color: '#475569' }}>
+        </div>
+
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '6px',
+            padding: '5px 12px',
+            fontSize: '12px',
+            fontWeight: 700,
+            color: '#1e293b',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+          }}
+        >
           Method: {methodCount}
-        </span>
+        </div>
       </div>
 
-      {/* Issues Table */}
+      {/* Jadual Rekod 4M Issues */}
       <div className="panel table-panel">
         <div className="table-wrap">
           <table>
@@ -330,7 +411,7 @@ export default function Issues({ issueList = [], setIssueList }) {
             <tbody>
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="small-note" style={{ textAlign: 'center', padding: '20px' }}>
+                  <td colSpan="10" className="small-note" style={{ textAlign: 'center', padding: '22px' }}>
                     No Issues.
                   </td>
                 </tr>
